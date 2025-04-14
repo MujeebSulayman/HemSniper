@@ -1,0 +1,16 @@
+{
+  "name": "hemsniper-backend",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^15.3.0",
+    "typescript": "^5.0.0"
+  }
+}
