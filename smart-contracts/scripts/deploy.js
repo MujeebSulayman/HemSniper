@@ -1,7 +1,6 @@
 require('dotenv').config();
 const { ethers } = require('hardhat');
 
-// Utility function to validate and format Ethereum addresses
 function validateAndFormatAddress(address) {
   try {
     return ethers.getAddress(address);
