@@ -79,19 +79,9 @@ interface ICurvePool {
     ) external returns (uint256);
 }
 
-interface IAcrossSpokePool {
-    function deposit(
-        uint256 amount,
-        address token,
-        uint256 destinationChainId,
-        address recipient,
-        uint64 relayerFeePct,
-        uint32 quoteTimestamp,
-        bytes memory message
-    ) external payable returns (uint64 depositId);
-}
 
-// Smart contract for executing cross-chain arbitrage using flash loans across multiple DEXs
+
+// Smart contract for executing Ethereum-only arbitrage using flash loans across multiple DEXs
 contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -117,7 +107,6 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
 
     // Contract addresses
     address public lendingPool;
-    address public acrossSpokePool;
 
     // Fee settings
     uint256 public protocolFeePercent = 100;
@@ -137,10 +126,7 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         address[] dexRouters;
         bytes[] swapData;
         uint256 deadline;
-        uint256 destinationChainId;
         address recipient;
-        uint64 relayerFeePct;
-        uint32 quoteTimestamp;
     }
 
     // Events
@@ -155,13 +141,7 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         uint256 timestamp
     );
 
-    event BridgeInitiated(
-        address indexed token,
-        uint256 amount,
-        uint256 destinationChainId,
-        address recipient,
-        uint64 depositId
-    );
+
 
     event FlashLoanExecuted(
         address indexed token,
@@ -172,11 +152,9 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
 
     // Constructor
     constructor(
-        address _lendingPool,
-        address _acrossSpokePool
+        address _lendingPool
     ) Ownable(msg.sender) {
         lendingPool = _lendingPool;
-        acrossSpokePool = _acrossSpokePool;
     }
 
     function addDex(
@@ -251,18 +229,14 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
     }
 
     function updateAddresses(
-        address _lendingPool,
-        address _swapRouter,
-        address _acrossSpokePool
+        address _lendingPool
     ) external onlyOwner {
         if (_lendingPool != address(0)) lendingPool = _lendingPool;
-        if (_swapRouter != address(0)) swapRouter = _swapRouter;
-        if (_acrossSpokePool != address(0)) acrossSpokePool = _acrossSpokePool;
     }
 
     // ============ Arbitrage Functions ============
 
-    function executeCrossChainArbitrage(
+    function executeArbitrage(
         ArbitrageParams calldata params
     ) external nonReentrant {
         require(supportedTokens[params.tokenIn], "Unsupported input token");
@@ -272,10 +246,6 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         require(
             params.dexRouters.length == params.swapData.length,
             "DEX and swap data length mismatch"
-        );
-        require(
-            params.destinationChainId != block.chainid,
-            "Destination must be different chain"
         );
         require(params.recipient != address(0), "Invalid recipient");
 
@@ -429,26 +399,8 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         uint256 remainingAmount = currentAmount - protocolFee;
         require(remainingAmount > totalRepayment, "Insufficient profit");
 
-        // Step 5: Bridge tokens to destination chain
-        IERC20(arbParams.tokenOut).approve(acrossSpokePool, remainingAmount);
-
-        uint64 depositId = IAcrossSpokePool(acrossSpokePool).deposit(
-            remainingAmount,
-            arbParams.tokenOut,
-            arbParams.destinationChainId,
-            arbParams.recipient,
-            arbParams.relayerFeePct,
-            arbParams.quoteTimestamp,
-            ""
-        );
-
-        emit BridgeInitiated(
-            arbParams.tokenOut,
-            remainingAmount,
-            arbParams.destinationChainId,
-            arbParams.recipient,
-            depositId
-        );
+        // Step 5: Transfer remaining tokens to recipient
+        IERC20(arbParams.tokenOut).safeTransfer(arbParams.recipient, remainingAmount);
 
         // Step 6: Repay flash loan
         IERC20(assets[0]).approve(lendingPool, totalRepayment);
@@ -456,7 +408,7 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         // Step 7: Transfer protocol fee to contract owner
         IERC20(arbParams.tokenOut).safeTransfer(owner(), protocolFee);
 
-        // Step 8: Log arbitrage execution
+        // Step 7: Log arbitrage execution
         emit ArbitrageExecuted(
             user,
             assets[0],
@@ -471,38 +423,7 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         return true;
     }
 
-    /**
-     * @dev Execute single-chain arbitrage using flash loan
-     * @param params Arbitrage parameters
-     */
-    function executeSingleChainArbitrage(
-        ArbitrageParams calldata params
-    ) external nonReentrant {
-        require(supportedTokens[params.tokenIn], "Unsupported input token");
-        require(supportedTokens[params.tokenOut], "Unsupported output token");
-        require(params.amountIn > 0, "Amount must be > 0");
 
-        // Prepare flash loan
-        address[] memory assets = new address[](1);
-        assets[0] = params.tokenIn;
-
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = params.amountIn;
-
-        uint256[] memory modes = new uint256[](1);
-        modes[0] = 0; // no debt, just flash loan
-
-        // Execute flash loan
-        ILendingPool(lendingPool).flashLoan(
-            address(this),
-            assets,
-            amounts,
-            modes,
-            address(this),
-            abi.encode(params, msg.sender, true),
-            0
-        );
-    }
 
     /**
      * @dev Emergency withdraw function
