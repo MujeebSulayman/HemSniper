@@ -7,10 +7,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
-/**
- * @title IFlashLoanReceiver
- * @dev Interface for Aave V3 flash loan receiver
- */
 interface IFlashLoanReceiver {
     function executeOperation(
         address[] calldata assets,
@@ -21,10 +17,8 @@ interface IFlashLoanReceiver {
     ) external returns (bool);
 }
 
-/**
- * @title ILendingPool
- * @dev Interface for Aave V3 lending pool
- */
+// External Protocol Interfaces
+
 interface ILendingPool {
     function flashLoan(
         address receiverAddress,
@@ -37,10 +31,6 @@ interface ILendingPool {
     ) external;
 }
 
-/**
- * @title IUniswapV3Router
- * @dev Interface for Uniswap V3 router
- */
 interface IUniswapV3Router {
     struct ExactInputSingleParams {
         address tokenIn;
@@ -58,10 +48,6 @@ interface IUniswapV3Router {
     ) external payable returns (uint256 amountOut);
 }
 
-/**
- * @title IUniswapV2Router
- * @dev Interface for Uniswap V2, SushiSwap, PancakeSwap, etc.
- */
 interface IUniswapV2Router {
     function swapExactTokensForTokens(
         uint amountIn,
@@ -77,10 +63,6 @@ interface IUniswapV2Router {
     ) external view returns (uint[] memory amounts);
 }
 
-/**
- * @title ICurvePool
- * @dev Interface for Curve Finance pools
- */
 interface ICurvePool {
     function exchange(
         int128 i,
@@ -96,10 +78,6 @@ interface ICurvePool {
     ) external returns (uint256);
 }
 
-/**
- * @title IAcrossSpokePool
- * @dev Interface for Across Protocol bridge
- */
 interface IAcrossSpokePool {
     function deposit(
         uint256 amount,
@@ -112,15 +90,11 @@ interface IAcrossSpokePool {
     ) external payable returns (uint64 depositId);
 }
 
-/**
- * @title ArbExecutor
- * @dev Smart contract for executing cross-chain arbitrage using flash loans across multiple DEXs
- */
+// Smart contract for executing cross-chain arbitrage using flash loans across multiple DEXs
 contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    // Constants
     uint256 private constant BASIS_POINTS = 10000;
 
     // DEX types
@@ -145,8 +119,8 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
     address public acrossSpokePool;
 
     // Fee settings
-    uint256 public protocolFeePercent = 100; 
-    uint256 public minProfitThreshold = 10 * 10 ** 18; 
+    uint256 public protocolFeePercent = 100;
+    uint256 public minProfitThreshold = 10 * 10 ** 18;
 
     // Supported tokens and DEXs
     mapping(address => bool) public supportedTokens;
@@ -195,11 +169,7 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         bool success
     );
 
-    /**
-     * @dev Constructor
-     * @param _lendingPool Aave lending pool address
-     * @param _acrossSpokePool Across Protocol bridge address
-     */
+    // Constructor
     constructor(
         address _lendingPool,
         address _acrossSpokePool
@@ -208,12 +178,6 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         acrossSpokePool = _acrossSpokePool;
     }
 
-    /**
-     * @dev Add a DEX to the registry
-     * @param _routerAddress DEX router address
-     * @param _dexType Type of DEX (UniswapV2, UniswapV3, Curve, etc.)
-     * @param _name Name of the DEX (e.g., "Uniswap V3", "SushiSwap")
-     */
     function addDex(
         address _routerAddress,
         DexType _dexType,
@@ -236,11 +200,6 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         dexAddresses.add(_routerAddress);
     }
 
-    /**
-     * @dev Update a DEX in the registry
-     * @param _routerAddress DEX router address
-     * @param _active Whether the DEX is active
-     */
     function updateDex(
         address _routerAddress,
         bool _active
@@ -251,10 +210,6 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         dexInfo.active = _active;
     }
 
-    /**
-     * @dev Remove a DEX from the registry
-     * @param _routerAddress DEX router address
-     */
     function removeDex(address _routerAddress) external onlyOwner {
         require(dexAddresses.contains(_routerAddress), "DEX not registered");
 
@@ -262,10 +217,6 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         dexAddresses.remove(_routerAddress);
     }
 
-    /**
-     * @dev Get all registered DEXs
-     * @return Array of DEX addresses
-     */
     function getAllDexes() external view returns (address[] memory) {
         uint256 length = dexAddresses.length();
         address[] memory dexes = new address[](length);
@@ -278,7 +229,6 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
     }
 
     // ============ Admin Functions ============
-
 
     function addSupportedToken(address token) external onlyOwner {
         supportedTokens[token] = true;
@@ -293,13 +243,11 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         protocolFeePercent = _feePercent;
     }
 
-
     function setMinProfitThreshold(
         uint256 _minProfitThreshold
     ) external onlyOwner {
         minProfitThreshold = _minProfitThreshold;
     }
-
 
     function updateAddresses(
         address _lendingPool,
