@@ -279,47 +279,28 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
 
     // ============ Admin Functions ============
 
-    /**
-     * @dev Add supported token
-     * @param token Token address
-     */
+
     function addSupportedToken(address token) external onlyOwner {
         supportedTokens[token] = true;
     }
 
-    /**
-     * @dev Remove supported token
-     * @param token Token address
-     */
     function removeSupportedToken(address token) external onlyOwner {
         supportedTokens[token] = false;
     }
 
-    /**
-     * @dev Set protocol fee percentage (in basis points)
-     * @param _feePercent New fee percentage
-     */
     function setProtocolFeePercent(uint256 _feePercent) external onlyOwner {
         require(_feePercent <= 500, "Fee too high"); // Max 5%
         protocolFeePercent = _feePercent;
     }
 
-    /**
-     * @dev Set minimum profit threshold
-     * @param _minProfitThreshold New minimum profit threshold
-     */
+
     function setMinProfitThreshold(
         uint256 _minProfitThreshold
     ) external onlyOwner {
         minProfitThreshold = _minProfitThreshold;
     }
 
-    /**
-     * @dev Update contract addresses
-     * @param _lendingPool New lending pool address
-     * @param _swapRouter New swap router address
-     * @param _acrossSpokePool New Across Protocol bridge address
-     */
+
     function updateAddresses(
         address _lendingPool,
         address _swapRouter,
@@ -332,10 +313,6 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
 
     // ============ Arbitrage Functions ============
 
-    /**
-     * @dev Execute cross-chain arbitrage using flash loan
-     * @param params Arbitrage parameters
-     */
     function executeCrossChainArbitrage(
         ArbitrageParams calldata params
     ) external nonReentrant {
@@ -370,7 +347,7 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         amounts[0] = params.amountIn;
 
         uint256[] memory modes = new uint256[](1);
-        modes[0] = 0; // no debt, just flash loan
+        modes[0] = 0;
 
         // Execute flash loan
         ILendingPool(lendingPool).flashLoan(
@@ -380,7 +357,7 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
             modes,
             address(this),
             abi.encode(params, msg.sender),
-            0 // referral code
+            0
         );
     }
 
