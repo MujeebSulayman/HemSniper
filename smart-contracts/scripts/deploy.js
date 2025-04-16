@@ -25,22 +25,22 @@ const getDexConfigurations = (networkName) => {
     {
       name: "Uniswap V3",
       type: DexType.UniswapV3,
-      address: "0xE592427A0AEce92De3Edee1F18E0157C05861564" // Uniswap V3 Router
+      address: process.env.UNISWAP_V3_ROUTER_MAINNET
     },
     {
       name: "Uniswap V2",
       type: DexType.UniswapV2,
-      address: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D" // Uniswap V2 Router
+      address: process.env.UNISWAP_V2_ROUTER_MAINNET
     },
     {
       name: "SushiSwap",
       type: DexType.UniswapV2,
-      address: "0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F" // SushiSwap Router
+      address: process.env.SUSHISWAP_ROUTER_MAINNET
     },
     {
       name: "Curve 3Pool",
       type: DexType.Curve,
-      address: "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7" // Curve 3Pool
+      address: process.env.CURVE_3POOL_MAINNET
     }
   ];
   
@@ -49,52 +49,16 @@ const getDexConfigurations = (networkName) => {
     {
       name: "Uniswap V3",
       type: DexType.UniswapV3,
-      address: "0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD" // Uniswap V3 Router on Sepolia
+      address: process.env.UNISWAP_V3_ROUTER_SEPOLIA
     },
     {
       name: "Uniswap V2",
       type: DexType.UniswapV2,
-      address: process.env.UNISWAP_V2_ROUTER_SEPOLIA || "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D" // Placeholder
+      address: process.env.UNISWAP_V2_ROUTER_SEPOLIA
     }
   ];
   
-  // Arbitrum DEX addresses
-  const arbitrumDexes = [
-    {
-      name: "Uniswap V3",
-      type: DexType.UniswapV3,
-      address: "0xE592427A0AEce92De3Edee1F18E0157C05861564" // Uniswap V3 Router on Arbitrum
-    },
-    {
-      name: "SushiSwap",
-      type: DexType.UniswapV2,
-      address: "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506" // SushiSwap Router on Arbitrum
-    },
-    {
-      name: "Camelot",
-      type: DexType.UniswapV2,
-      address: "0xc873fEcbd354f5A56E00E710B90EF4201db2448d" // Camelot Router on Arbitrum
-    }
-  ];
-  
-  // Base network DEX addresses
-  const baseDexes = [
-    {
-      name: "Uniswap V3",
-      type: DexType.UniswapV3,
-      address: "0x2626664c2603336E57B271c5C0b26F421741e481" // Uniswap V3 Router on Base
-    },
-    {
-      name: "BaseSwap",
-      type: DexType.UniswapV2,
-      address: "0x327Df1E6de05895d2ab08513aaDD9313Fe505d86" // BaseSwap Router
-    },
-    {
-      name: "Aerodrome",
-      type: DexType.UniswapV2,
-      address: "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43" // Aerodrome Router
-    }
-  ];
+
   
   // Return the appropriate DEX configuration based on the network
   switch (networkName) {
@@ -102,21 +66,7 @@ const getDexConfigurations = (networkName) => {
       return mainnetDexes;
     case 'sepolia':
       return sepoliaDexes;
-    case 'arbitrum':
-    case 'arbitrumOne':
-      return arbitrumDexes;
-    case 'arbitrumSepolia':
-      return arbitrumDexes.map(dex => ({
-        ...dex,
-        address: process.env[`${dex.name.toUpperCase().replace(' ', '_')}_ROUTER_ARBITRUM_SEPOLIA`] || dex.address
-      }));
-    case 'base':
-      return baseDexes;
-    case 'baseSepolia':
-      return baseDexes.map(dex => ({
-        ...dex,
-        address: process.env[`${dex.name.toUpperCase().replace(' ', '_')}_ROUTER_BASE_SEPOLIA`] || dex.address
-      }));
+
     default:
       // For local development, use mainnet addresses
       return mainnetDexes;
@@ -131,26 +81,25 @@ async function main() {
     console.log('Account balance:', (await ethers.provider.getBalance(deployer.address)).toString());
 
     // Get contract addresses from environment variables
-    const lendingPoolAddress = process.env.AAVE_LENDING_POOL_ADDRESS;
-    const acrossSpokePoolAddress = process.env.ACROSS_SPOKE_POOL_ADDRESS;
+    const lendingPoolAddress = networkName === 'mainnet' 
+      ? process.env.AAVE_LENDING_POOL_ADDRESS_MAINNET 
+      : process.env.AAVE_LENDING_POOL_ADDRESS;
 
     // Validate environment variables
-    if (!lendingPoolAddress || !acrossSpokePoolAddress) {
+    if (!lendingPoolAddress) {
       throw new Error(
-        'Required environment variables missing. Please check AAVE_LENDING_POOL_ADDRESS and ACROSS_SPOKE_POOL_ADDRESS'
+        'Required environment variable missing. Please check AAVE_LENDING_POOL_ADDRESS for Sepolia or AAVE_LENDING_POOL_ADDRESS_MAINNET for mainnet'
       );
     }
 
     // Format addresses
     const formattedLendingPoolAddress = validateAndFormatAddress(lendingPoolAddress);
-    const formattedAcrossSpokePoolAddress = validateAndFormatAddress(acrossSpokePoolAddress);
 
     // Deploy ArbExecutor contract
     console.log('Deploying ArbExecutor Contract...');
     const ArbExecutor = await ethers.getContractFactory('ArbExecutor');
     const arbExecutor = await ArbExecutor.deploy(
-      formattedLendingPoolAddress,
-      formattedAcrossSpokePoolAddress
+      formattedLendingPoolAddress
     );
     
     await arbExecutor.waitForDeployment();
@@ -220,7 +169,7 @@ async function main() {
       network: networkName,
       ArbExecutor: arbExecutorAddress,
       AaveLendingPool: formattedLendingPoolAddress,
-      AcrossSpokePool: formattedAcrossSpokePoolAddress,
+
       supportedTokens,
       registeredDexes: dexConfigurations.map(dex => ({
         name: dex.name,
