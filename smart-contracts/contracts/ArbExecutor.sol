@@ -70,6 +70,7 @@ interface ICurvePool {
         uint256 dx,
         uint256 min_dy
     ) external returns (uint256);
+
     function exchange_underlying(
         int128 i,
         int128 j,
@@ -99,11 +100,11 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
 
     // DEX types
     enum DexType {
-        UniswapV2, // Uniswap V2, SushiSwap, PancakeSwap, etc.
-        UniswapV3, // Uniswap V3
-        Curve, // Curve Finance
-        Balancer, // Balancer
-        Custom // Custom DEX implementation
+        UniswapV2,
+        UniswapV3,
+        Curve,
+        Balancer,
+        Custom
     }
 
     // DEX information
