@@ -11,7 +11,6 @@ describe("ArbExecutor Contract", function () {
   let mockSwapRouter;
   let mockSwapRouterV3;
   let mockCurvePool;
-  let mockAcrossSpokePool;
   let mockToken;
 
   // Constants
@@ -32,7 +31,6 @@ describe("ArbExecutor Contract", function () {
   let MockSwapRouter;
   let MockSwapRouterV3;
   let MockCurvePool;
-  let MockASpokePool;
 
   beforeEach(async function () {
     // Get signers
@@ -55,14 +53,10 @@ describe("ArbExecutor Contract", function () {
     MockCurvePool = await ethers.getContractFactory("MockSwapRouter");
     mockCurvePool = await MockCurvePool.deploy();
     
-    MockAcrossSpokePool = await ethers.getContractFactory("MockAcrossSpokePool");
-    mockAcrossSpokePool = await MockAcrossSpokePool.deploy();
-    
     // Deploy ArbExecutor contract
     ArbExecutor = await ethers.getContractFactory("ArbExecutor");
     arbExecutor = await ArbExecutor.deploy(
-      await mockLendingPool.getAddress(),
-      await mockAcrossSpokePool.getAddress()
+      await mockLendingPool.getAddress()
     );
     
     // Register DEXs
@@ -92,7 +86,6 @@ describe("ArbExecutor Contract", function () {
 
     it("Should set the correct contract addresses", async function () {
       expect(await arbExecutor.lendingPool()).to.equal(await mockLendingPool.getAddress());
-      expect(await arbExecutor.acrossSpokePool()).to.equal(await mockAcrossSpokePool.getAddress());
     });
     
     it("Should register DEXs correctly", async function () {
@@ -199,9 +192,8 @@ describe("ArbExecutor Contract", function () {
 
     it("Should allow owner to update contract addresses", async function () {
       const newAddress = addrs[0].address;
-      await arbExecutor.updateAddresses(newAddress, newAddress);
+      await arbExecutor.updateAddresses(newAddress);
       expect(await arbExecutor.lendingPool()).to.equal(newAddress);
-      expect(await arbExecutor.acrossSpokePool()).to.equal(newAddress);
     });
 
     it("Should not allow non-owner to call admin functions", async function () {
@@ -219,171 +211,109 @@ describe("ArbExecutor Contract", function () {
     });
   });
 
-  describe("Cross-Chain Arbitrage", function () {
-    // These tests require more complex mocking of the flash loan process
-    // For simplicity, we'll focus on input validation and event emission
-    
+  describe("Arbitrage Execution", function () {
     it("Should revert if token is not supported", async function () {
       const params = {
         tokenIn: await mockToken.getAddress(),
         tokenOut: await mockToken.getAddress(),
         amountIn: ethers.parseEther("1"),
         minAmountOut: ethers.parseEther("0.9"),
-        destinationChainId: 42161, // Arbitrum
-        recipient: user.address,
-        relayerFeePct: 0,
-        quoteTimestamp: Math.floor(Date.now() / 1000),
         dexRouters: [await mockSwapRouter.getAddress()],
-        swapData: ["0x"] // Empty swap data for testing
+        swapData: ["0x"],
+        deadline: Math.floor(Date.now() / 1000) + 3600,
+        recipient: user.address
       };
-      
       await expect(
-        arbExecutor.executeCrossChainArbitrage(params)
+        arbExecutor.executeArbitrage(params)
       ).to.be.revertedWith("Unsupported input token");
     });
-    
+
     it("Should revert if amount is zero", async function () {
       await arbExecutor.addSupportedToken(await mockToken.getAddress());
-      
       const params = {
         tokenIn: await mockToken.getAddress(),
         tokenOut: await mockToken.getAddress(),
         amountIn: 0,
         minAmountOut: ethers.parseEther("0.9"),
-        destinationChainId: 42161,
-        recipient: user.address,
-        relayerFeePct: 0,
-        quoteTimestamp: Math.floor(Date.now() / 1000),
         dexRouters: [await mockSwapRouter.getAddress()],
-        swapData: ["0x"]
+        swapData: ["0x"],
+        deadline: Math.floor(Date.now() / 1000) + 3600,
+        recipient: user.address
       };
-      
       await expect(
-        arbExecutor.executeCrossChainArbitrage(params)
+        arbExecutor.executeArbitrage(params)
       ).to.be.revertedWith("Amount must be > 0");
     });
-    
+
     it("Should revert if no DEXs are specified", async function () {
       await arbExecutor.addSupportedToken(await mockToken.getAddress());
-      
       const params = {
         tokenIn: await mockToken.getAddress(),
         tokenOut: await mockToken.getAddress(),
         amountIn: ethers.parseEther("1"),
         minAmountOut: ethers.parseEther("0.9"),
-        destinationChainId: 42161,
-        recipient: user.address,
-        relayerFeePct: 0,
-        quoteTimestamp: Math.floor(Date.now() / 1000),
         dexRouters: [],
-        swapData: []
+        swapData: [],
+        deadline: Math.floor(Date.now() / 1000) + 3600,
+        recipient: user.address
       };
-      
       await expect(
-        arbExecutor.executeCrossChainArbitrage(params)
+        arbExecutor.executeArbitrage(params)
       ).to.be.revertedWith("No DEXs specified");
     });
-    
+
     it("Should revert if DEX and swap data length mismatch", async function () {
       await arbExecutor.addSupportedToken(await mockToken.getAddress());
-      
       const params = {
         tokenIn: await mockToken.getAddress(),
         tokenOut: await mockToken.getAddress(),
         amountIn: ethers.parseEther("1"),
         minAmountOut: ethers.parseEther("0.9"),
-        destinationChainId: 42161,
-        recipient: user.address,
-        relayerFeePct: 0,
-        quoteTimestamp: Math.floor(Date.now() / 1000),
         dexRouters: [await mockSwapRouter.getAddress(), await mockSwapRouterV3.getAddress()],
-        swapData: ["0x"] // Only one swap data for two DEXs
+        swapData: ["0x"],
+        deadline: Math.floor(Date.now() / 1000) + 3600,
+        recipient: user.address
       };
-      
       await expect(
-        arbExecutor.executeCrossChainArbitrage(params)
+        arbExecutor.executeArbitrage(params)
       ).to.be.revertedWith("DEX and swap data length mismatch");
     });
-    
-    it("Should revert if destination chain is the same as current chain", async function () {
-      await arbExecutor.addSupportedToken(await mockToken.getAddress());
-      
-      const params = {
-        tokenIn: await mockToken.getAddress(),
-        tokenOut: await mockToken.getAddress(),
-        amountIn: ethers.parseEther("1"),
-        minAmountOut: ethers.parseEther("0.9"),
-        destinationChainId: 31337, // Hardhat's chainId
-        recipient: user.address,
-        relayerFeePct: 0,
-        quoteTimestamp: Math.floor(Date.now() / 1000),
-        dexRouters: [await mockSwapRouter.getAddress()],
-        swapData: ["0x"]
-      };
-      
-      await expect(
-        arbExecutor.executeCrossChainArbitrage(params)
-      ).to.be.revertedWith("Destination must be different chain");
-    });
-    
+
     it("Should revert if recipient is zero address", async function () {
       await arbExecutor.addSupportedToken(await mockToken.getAddress());
-      
       const params = {
         tokenIn: await mockToken.getAddress(),
         tokenOut: await mockToken.getAddress(),
         amountIn: ethers.parseEther("1"),
         minAmountOut: ethers.parseEther("0.9"),
-        destinationChainId: 42161,
-        recipient: ZERO_ADDRESS,
-        relayerFeePct: 0,
-        quoteTimestamp: Math.floor(Date.now() / 1000),
         dexRouters: [await mockSwapRouter.getAddress()],
-        swapData: ["0x"]
+        swapData: ["0x"],
+        deadline: Math.floor(Date.now() / 1000) + 3600,
+        recipient: ZERO_ADDRESS
       };
-      
       await expect(
-        arbExecutor.executeCrossChainArbitrage(params)
+        arbExecutor.executeArbitrage(params)
       ).to.be.revertedWith("Invalid recipient");
     });
-    
-    it("Should emit events when executing cross-chain arbitrage", async function () {
-      // This test would normally require more complex mocking of the flash loan process
-      // For now, we'll just check that the correct events are emitted
-      
-      // Add token support
+
+    it("Should emit event when executing arbitrage", async function () {
       await arbExecutor.addSupportedToken(await mockToken.getAddress());
-      
-      // Create params for multi-DEX arbitrage
       const params = {
         tokenIn: await mockToken.getAddress(),
         tokenOut: await mockToken.getAddress(),
         amountIn: ethers.parseEther("1"),
         minAmountOut: ethers.parseEther("0.9"),
-        destinationChainId: 42161,
-        recipient: user.address,
-        relayerFeePct: 0,
-        quoteTimestamp: Math.floor(Date.now() / 1000),
         dexRouters: [
           await mockSwapRouter.getAddress(),
           await mockSwapRouterV3.getAddress()
         ],
-        swapData: [
-          "0x1234", // Mock swap data for first DEX
-          "0x5678"  // Mock swap data for second DEX
-        ]
+        swapData: ["0x1234", "0x5678"],
+        deadline: Math.floor(Date.now() / 1000) + 3600,
+        recipient: user.address
       };
-      
-      // We can't fully test the execution without mocking the flash loan callback,
-      // but we can check that the ArbitrageInitiated event is emitted with correct parameters
-      await expect(arbExecutor.executeCrossChainArbitrage(params))
-        .to.emit(arbExecutor, "ArbitrageInitiated")
-        .withArgs(
-          await mockToken.getAddress(),
-          await mockToken.getAddress(),
-          ethers.parseEther("1"),
-          ethers.parseEther("0.9")
-        );
+      await expect(
+        arbExecutor.executeArbitrage(params)
+      ).to.emit(arbExecutor, "ArbitrageExecuted");
     });
   });
 
