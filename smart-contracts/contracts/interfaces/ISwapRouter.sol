@@ -16,4 +16,18 @@ interface ISwapRouter {
     function exactInputSingle(
         ExactInputSingleParams calldata params
     ) external payable returns (uint256 amountOut);
+
+    // Multi-hop swap parameters
+    struct ExactInputParams {
+        bytes path;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+    }
+
+    /// @notice Executes a multi-hop swap
+    function exactInput(
+        ExactInputParams calldata params
+    ) external payable returns (uint256 amountOut);
 }

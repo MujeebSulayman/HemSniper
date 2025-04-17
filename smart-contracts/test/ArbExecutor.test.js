@@ -28,8 +28,8 @@ describe("ArbExecutor Contract", function () {
   // Mock contract factories
   let MockToken;
   let MockLendingPool;
-  let MockSwapRouter;
-  let MockSwapRouterV3;
+  let MockUniswapV2Router;
+  let MockUniswapV3Router;
   let MockCurvePool;
 
   beforeEach(async function () {
@@ -44,13 +44,13 @@ describe("ArbExecutor Contract", function () {
     mockLendingPool = await MockLendingPool.deploy();
     
     // Deploy mock DEX routers
-    MockSwapRouter = await ethers.getContractFactory("MockSwapRouter");
-    mockSwapRouter = await MockSwapRouter.deploy();
+    MockUniswapV2Router = await ethers.getContractFactory("MockUniswapV2Router");
+    mockSwapRouter = await MockUniswapV2Router.deploy();
     
-    MockSwapRouterV3 = await ethers.getContractFactory("MockSwapRouter");
-    mockSwapRouterV3 = await MockSwapRouterV3.deploy();
+    MockUniswapV3Router = await ethers.getContractFactory("MockUniswapV3Router");
+    mockSwapRouterV3 = await MockUniswapV3Router.deploy();
     
-    MockCurvePool = await ethers.getContractFactory("MockSwapRouter");
+    MockCurvePool = await ethers.getContractFactory("MockCurvePool");
     mockCurvePool = await MockCurvePool.deploy();
     
     // Deploy ArbExecutor contract
@@ -134,7 +134,7 @@ describe("ArbExecutor Contract", function () {
     });
     
     it("Should allow owner to add a new DEX", async function () {
-      const newMockDex = await MockSwapRouter.deploy();
+      const newMockDex = await MockUniswapV2Router.deploy();
       await arbExecutor.addDex(
         await newMockDex.getAddress(),
         DexType.Balancer,
@@ -151,7 +151,7 @@ describe("ArbExecutor Contract", function () {
     });
     
     it("Should allow owner to update a DEX", async function () {
-      const newMockDex = await MockSwapRouter.deploy();
+      const newMockDex = await MockUniswapV2Router.deploy();
       await arbExecutor.updateDex(
         0, // Update the first DEX (Uniswap V2)
         await newMockDex.getAddress(),
