@@ -32,7 +32,7 @@ describe("ArbExecutor Contract", function () {
   let MockSwapRouter;
   let MockSwapRouterV3;
   let MockCurvePool;
-  let MockAcrossSpokePool;
+  let MockASpokePool;
 
   beforeEach(async function () {
     // Get signers
