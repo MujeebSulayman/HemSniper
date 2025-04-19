@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { ethers } = require("hardhat");
+const { ethers, network } = require("hardhat");
 
 function validateAndFormatAddress(address) {
   try {
@@ -18,7 +18,7 @@ const DexType = {
 };
 
 // DEX configurations for different networks
-const getDexConfigurations = (networkName) => {
+const getDexConfigurations = (network) => {
   // Mainnet DEX addresses
   const mainnetDexes = [
     {
@@ -58,7 +58,7 @@ const getDexConfigurations = (networkName) => {
   ];
 
   // Return the appropriate DEX configuration based on the network
-  switch (networkName) {
+  switch (network) {
     case "mainnet":
       return mainnetDexes;
     case "sepolia":
@@ -81,10 +81,9 @@ async function main() {
     );
 
     // Get contract addresses from environment variables
-    const lendingPoolAddress =
-      networkName === "mainnet"
-        ? process.env.AAVE_LENDING_POOL_ADDRESS_MAINNET
-        : process.env.AAVE_LENDING_POOL_ADDRESS;
+    const lendingPoolAddress = network.name === "mainnet"
+      ? process.env.AAVE_LENDING_POOL_ADDRESS_MAINNET
+      : process.env.AAVE_LENDING_POOL_ADDRESS;
 
     // Validate environment variables
     if (!lendingPoolAddress) {
@@ -101,30 +100,15 @@ async function main() {
     console.log("Deploying ArbExecutor Contract...");
     const ArbExecutor = await ethers.getContractFactory("ArbExecutor");
     
-    // Estimate gas for deployment
-    console.log("Estimating gas for contract deployment...");
-    const deploymentGasEstimate = await ethers.provider.estimateGas(
-      ArbExecutor.getDeployTransaction(formattedLendingPoolAddress).data
-    );
-    const gasPrice = await ethers.provider.getGasPrice();
-    const estimatedCost = deploymentGasEstimate * gasPrice;
-    
-    console.log(`Estimated gas units: ${deploymentGasEstimate.toString()}`);
-    console.log(`Current gas price: ${ethers.formatUnits(gasPrice, "gwei")} gwei`);
-    console.log(`Estimated deployment cost: ${ethers.formatEther(estimatedCost)} ETH`);
-    
-    // Proceed with actual deployment
+    // Proceed with deployment
     const arbExecutor = await ArbExecutor.deploy(formattedLendingPoolAddress);
     
     await arbExecutor.waitForDeployment();
     const arbExecutorAddress = await arbExecutor.getAddress();
     console.log("ArbExecutor Contract deployed to:", arbExecutorAddress);
 
-    // Get current network name
-    const networkName = process.env.HARDHAT_NETWORK || "localhost";
-    console.log(`Registering DEXs for network: ${networkName}...`);
-
-    const dexConfigurations = getDexConfigurations(networkName);
+    console.log("Registering DEXes...");
+    const dexConfigurations = getDexConfigurations(network.name);
 
     // Register each DEX
     for (const dex of dexConfigurations) {
@@ -186,7 +170,7 @@ async function main() {
 
     // Use the network name from earlier
     const deployedAddresses = {
-      network: networkName,
+      network: network.name,
       ArbExecutor: arbExecutorAddress,
       AaveLendingPool: formattedLendingPoolAddress,
 
@@ -199,11 +183,11 @@ async function main() {
     };
 
     fs.writeFileSync(
-      `${deploymentDir}/${networkName}-addresses.json`,
+      `${deploymentDir}/${network.name}-addresses.json`,
       JSON.stringify(deployedAddresses, null, 2)
     );
     console.log(
-      `Contract addresses saved to ${deploymentDir}/${networkName}-addresses.json`
+      `Contract addresses saved to ${deploymentDir}/${network.name}-addresses.json`
     );
 
     console.log("Deployment completed successfully");
