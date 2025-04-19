@@ -79,7 +79,32 @@ interface ICurvePool {
     ) external returns (uint256);
 }
 
-
+interface IBalancerVault {
+    enum SwapKind { GIVEN_IN, GIVEN_OUT }
+    
+    struct SingleSwap {
+        bytes32 poolId;
+        SwapKind kind;
+        address assetIn;
+        address assetOut;
+        uint256 amount;
+        bytes userData;
+    }
+    
+    struct FundManagement {
+        address sender;
+        bool fromInternalBalance;
+        address recipient;
+        bool toInternalBalance;
+    }
+    
+    function swap(
+        SingleSwap memory singleSwap,
+        FundManagement memory funds,
+        uint256 limit,
+        uint256 deadline
+    ) external payable returns (uint256);
+}
 
 // Smart contract for executing Ethereum-only arbitrage using flash loans across multiple DEXs
 contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
@@ -93,8 +118,7 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         UniswapV2,
         UniswapV3,
         Curve,
-        Balancer,
-        Custom
+        Balancer
     }
 
     // DEX information
@@ -141,8 +165,6 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         uint256 timestamp
     );
 
-
-
     event FlashLoanExecuted(
         address indexed token,
         uint256 amount,
@@ -151,9 +173,7 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
     );
 
     // Constructor
-    constructor(
-        address _lendingPool
-    ) Ownable(msg.sender) {
+    constructor(address _lendingPool) Ownable(msg.sender) {
         lendingPool = _lendingPool;
     }
 
@@ -216,7 +236,6 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
     function removeSupportedToken(address token) external onlyOwner {
         supportedTokens[token] = false;
     }
-
     function setProtocolFeePercent(uint256 _feePercent) external onlyOwner {
         require(_feePercent <= 500, "Fee too high"); // Max 5%
         protocolFeePercent = _feePercent;
@@ -228,9 +247,7 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         minProfitThreshold = _minProfitThreshold;
     }
 
-    function updateAddresses(
-        address _lendingPool
-    ) external onlyOwner {
+    function updateAddresses(address _lendingPool) external onlyOwner {
         if (_lendingPool != address(0)) lendingPool = _lendingPool;
     }
 
@@ -352,7 +369,7 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
                 path[0] = currentToken;
                 path[1] = tokenOut;
 
-                uint[] memory amounts = IUniswapV2Router(dexRouter)
+                uint[] memory swapAmounts = IUniswapV2Router(dexRouter)
                     .swapExactTokensForTokens(
                         currentAmount,
                         amountOutMin,
@@ -361,36 +378,94 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
                         arbParams.deadline
                     );
 
-                currentAmount = amounts[amounts.length - 1];
+                currentAmount = swapAmounts[swapAmounts.length - 1];
                 currentToken = tokenOut;
             } else if (dexInfo.dexType == DexType.Curve) {
                 // Decode Curve swap parameters
-                (int128 i, int128 j, uint256 minDy, bool useUnderlying) = abi
-                    .decode(swapData, (int128, int128, uint256, bool));
+                (
+                    int128 curveI,
+                    int128 curveJ,
+                    uint256 minDy,
+                    bool useUnderlying,
+                    address tokenOut
+                ) = abi.decode(swapData, (int128, int128, uint256, bool, address));
+
+                // Validate token path
+                require(currentToken != tokenOut, "Invalid token path: same input and output");
 
                 if (useUnderlying) {
                     currentAmount = ICurvePool(dexRouter).exchange_underlying(
-                        i,
-                        j,
+                        curveI,
+                        curveJ,
                         currentAmount,
                         minDy
                     );
                 } else {
                     currentAmount = ICurvePool(dexRouter).exchange(
-                        i,
-                        j,
+                        curveI,
+                        curveJ,
                         currentAmount,
                         minDy
                     );
                 }
 
-                currentToken = arbParams.tokenOut;
+                // Verify we received the expected output token
+                require(IERC20(tokenOut).balanceOf(address(this)) >= currentAmount, "Curve swap failed");
+                currentToken = tokenOut;
+            } else if (dexInfo.dexType == DexType.Balancer) {
+                // Decode Balancer swap parameters
+                (
+                    bytes32 poolId,
+                    uint8 swapKindRaw,
+                    address tokenOut,
+                    uint256 limit
+                ) = abi.decode(swapData, (bytes32, uint8, address, uint256));
+                
+                // Validate token path
+                require(currentToken != tokenOut, "Invalid token path: same input and output");
+                
+                // Convert to Balancer SwapKind enum
+                IBalancerVault.SwapKind swapKind = IBalancerVault.SwapKind(swapKindRaw);
+                
+                // Create SingleSwap struct
+                IBalancerVault.SingleSwap memory singleSwap = IBalancerVault.SingleSwap({
+                    poolId: poolId,
+                    kind: swapKind,
+                    assetIn: currentToken,
+                    assetOut: tokenOut,
+                    amount: currentAmount,
+                    userData: ""
+                });
+                
+                // Create FundManagement struct
+                IBalancerVault.FundManagement memory funds = IBalancerVault.FundManagement({
+                    sender: address(this),
+                    fromInternalBalance: false,
+                    recipient: address(this),
+                    toInternalBalance: false
+                });
+                
+                // Execute swap
+                currentAmount = IBalancerVault(dexRouter).swap(
+                    singleSwap,
+                    funds,
+                    limit,
+                    arbParams.deadline
+                );
+                
+                // Update current token
+                currentToken = tokenOut;
+
+
             }
         }
 
         // Step 2: Calculate flash loan repayment amount
         uint256 totalRepayment = amounts[0] + premiums[0];
 
+        // Verify final token is the expected output token
+        require(currentToken == arbParams.tokenOut, "Final token mismatch");
+        
         // Step 3: Calculate protocol fee
         uint256 protocolFee = (currentAmount * protocolFeePercent) /
             BASIS_POINTS;
@@ -398,12 +473,17 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
         // Step 4: Verify profit
         uint256 remainingAmount = currentAmount - protocolFee;
         require(remainingAmount > totalRepayment, "Insufficient profit");
+        require(currentAmount - totalRepayment >= minProfitThreshold, "Profit below threshold");
 
         // Step 5: Transfer remaining tokens to recipient
-        IERC20(arbParams.tokenOut).safeTransfer(arbParams.recipient, remainingAmount);
+        IERC20(arbParams.tokenOut).safeTransfer(
+            arbParams.recipient,
+            remainingAmount
+        );
 
         // Step 6: Repay flash loan
         IERC20(assets[0]).approve(lendingPool, totalRepayment);
+        IERC20(assets[0]).safeTransfer(lendingPool, totalRepayment);
 
         // Step 7: Transfer protocol fee to contract owner
         IERC20(arbParams.tokenOut).safeTransfer(owner(), protocolFee);
@@ -422,8 +502,6 @@ contract ArbExecutor is Ownable, ReentrancyGuard, IFlashLoanReceiver {
 
         return true;
     }
-
-
 
     /**
      * @dev Emergency withdraw function
