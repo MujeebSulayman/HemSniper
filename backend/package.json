@@ -12,5 +12,9 @@
   "dependencies": {
     "next": "^15.3.0",
     "typescript": "^5.0.0"
-  }
+  },
+  "description": "This backend exposes API endpoints for: - Fetching arbitrage opportunities (`/api/opportunities`) - Simulating trades (`/api/simulate`) - Executing trades (`/api/execute`) - Querying user history (`/api/history`)",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

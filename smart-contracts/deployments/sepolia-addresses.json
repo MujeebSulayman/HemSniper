@@ -1,6 +1,6 @@
 {
   "network": "sepolia",
-  "ArbExecutor": "0x0e61B8a820548a0612dF058E3d2712e7DE4082c9",
+  "ArbExecutor": "0x195DdB753f72f020eE677324FF4F26Da4c2E472d",
   "AaveLendingPool": "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951",
   "supportedTokens": {
     "WETH": "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9",

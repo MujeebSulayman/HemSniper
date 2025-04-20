@@ -32,14 +32,14 @@ const getDexConfigurations = (network) => {
       address: process.env.UNISWAP_V2_ROUTER_MAINNET,
     },
     {
-      name: "SushiSwap",
-      type: DexType.UniswapV2,
-      address: process.env.SUSHISWAP_ROUTER_MAINNET,
-    },
-    {
       name: "Curve 3Pool",
       type: DexType.Curve,
       address: process.env.CURVE_3POOL_MAINNET,
+    },
+    {
+      name: "Balancer Vault",
+      type: DexType.Balancer,
+      address: process.env.BALANCER_VAULT_MAINNET,
     },
   ];
 
