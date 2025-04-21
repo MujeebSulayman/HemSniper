@@ -133,8 +133,27 @@ async function main() {
     // Add supported tokens (example tokens - adjust as needed)
     console.log("Adding supported tokens...");
 
-    // Common tokens to support (addresses for mainnet - adjust for your target network)
-    const supportedTokens = {
+    // Get network-specific token addresses
+    const supportedTokens = network.name === "mainnet" ? {
+      // Base Assets
+      WETH: process.env.WETH_ADDRESS_MAINNET,
+      WBTC: process.env.WBTC_ADDRESS_MAINNET,
+      
+      // Stablecoins
+      USDC: process.env.USDC_ADDRESS_MAINNET,
+      USDT: process.env.USDT_ADDRESS_MAINNET,
+      DAI: process.env.DAI_ADDRESS_MAINNET,
+      
+      // DEX Tokens
+      UNI: process.env.UNI_ADDRESS_MAINNET,
+      CRV: process.env.CRV_ADDRESS_MAINNET,
+      BAL: process.env.BAL_ADDRESS_MAINNET,
+      
+      // Other DeFi
+      LINK: process.env.LINK_ADDRESS_MAINNET,
+      AAVE: process.env.AAVE_ADDRESS_MAINNET
+    } : {
+      // Sepolia Tokens
       WETH: process.env.WETH_ADDRESS,
       USDC: process.env.USDC_ADDRESS,
       USDT: process.env.USDT_ADDRESS,
@@ -142,7 +161,7 @@ async function main() {
       UNI: process.env.UNI_ADDRESS,
       WBTC: process.env.WBTC_ADDRESS,
       LINK: process.env.LINK_ADDRESS,
-      AAVE: process.env.AAVE_ADDRESS,
+      AAVE: process.env.AAVE_ADDRESS
     };
 
     // Add each token
