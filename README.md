@@ -1,6 +1,6 @@
 # HemSniper AI
 
-HemSniper AI is an advanceda rbitrage system that leverages artificial intelligence to identify and execute profitable trading opportunities across multiple decentralized exchanges (DEXs) on Ethereum.
+HemSniper AI is an advanceda arbitrage system that leverages artificial intelligence to identify and execute profitable trading opportunities across multiple decentralized exchanges (DEXs) on Ethereum.
 
 ## Project Overview
 
