@@ -2,6 +2,23 @@ import { ethers } from 'ethers';
 import { CONFIG } from '../config/config';
 import ArbExecutor from '../abi/ArbExecutor.json';
 
+enum DexType {
+    UniswapV2,
+    UniswapV3,
+    Curve,
+    Balancer
+}
+
+interface ArbitrageParams {
+    tokenIn: string;
+    tokenOut: string;
+    amountIn: string;
+    minAmountOut: string;
+    dexRouters: string[];
+    swapData: string[];
+    deadline: number;
+}
+
 export class ArbitrageExecutor {
     private contract: ethers.Contract;
     private wallet: ethers.Wallet;
@@ -12,13 +29,7 @@ export class ArbitrageExecutor {
         this.contract = new ethers.Contract(CONFIG.ARB_EXECUTOR, ArbExecutor.abi, this.wallet);
     }
 
-    async executeArbitrage(params: {
-        tokenIn: string;
-        tokenOut: string;
-        amount: string;
-        sourceRouter: string;
-        targetRouter: string;
-    }) {
+    async executeArbitrage(params: ArbitrageParams) {
         try {
             // Estimate gas
             const gasPrice = await this.wallet.provider.getGasPrice();
@@ -31,17 +42,14 @@ export class ArbitrageExecutor {
             }
 
             // Execute the arbitrage
-            const tx = await this.contract.executeArbitrage({
-                tokenIn: params.tokenIn,
-                tokenOut: params.tokenOut,
-                amountIn: params.amount,
-                minAmountOut: '0', // Calculate this based on expected profit
-                dexRouters: [params.sourceRouter, params.targetRouter],
-                deadline: Math.floor(Date.now() / 1000) + 300, // 5 minutes
-            }, {
-                gasLimit: CONFIG.GAS_LIMIT,
-                gasPrice
-            });
+            const tx = await this.contract.executeArbitrage(
+                params,
+                {
+                    gasLimit: CONFIG.GAS_LIMIT,
+                    maxFeePerGas: CONFIG.MAX_FEE_PER_GAS,
+                    maxPriorityFeePerGas: CONFIG.PRIORITY_FEE
+                }
+            );
 
             console.log('Arbitrage transaction submitted:', tx.hash);
             const receipt = await tx.wait();
